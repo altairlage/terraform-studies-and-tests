@@ -17,7 +17,7 @@ $ terraform validate -json
 
 $ terraform plan
 
--
+
 
 After running those tests/checks and if no errors were generated it would be safe to run..
 
