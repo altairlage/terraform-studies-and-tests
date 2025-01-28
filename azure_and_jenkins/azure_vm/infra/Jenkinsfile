@@ -1,0 +1,104 @@
+#!/usr/bin/env groovy
+
+String githubCredentialName = 'jenkins-gh'
+String repoName = 'azure-terraform-tests'
+String githubUrl = "https://github.com/altairlage/${repoName}.git"
+String azureCredentialId = "azure-account-jenkins-app-registration"
+String azureStorageAccountAccessKey = "Add key here"
+
+// Define parameters and pipeline properties
+properties([
+    parameters([
+        booleanParam(name: 'APPLY', defaultValue: false, description: 'Check this box to apply changes'),
+        booleanParam(name: 'DESTROY', defaultValue: false, description: 'Check this box to destroy resources')
+    ]),
+
+    disableConcurrentBuilds(), // Disable concurrent builds
+    buildDiscarder(logRotator(numToKeepStr: '10')) // Keep only the last 10 builds
+])
+
+// Store parameter values in variables
+def apply = params.APPLY
+def destroy = params.DESTROY
+
+String branch = 'main'
+String action = params.APPLY ? 'apply' : params.DESTROY ? 'destroy' : ''
+
+echo("Branch: ${branch}")
+echo("Terraform action: ${action}")
+echo "Apply Changes: ${apply ? 'Yes' : 'No'}"
+echo "Destroy Resources: ${destroy ? 'Yes' : 'No'}"
+
+node("build_container") {
+    deleteDir()
+
+    try {
+        stage("Checkout") {
+            dir("files") {
+                println("Service code branch: ${branch}")
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${branch}"]], // Replace 'main' with your default branch (e.g., 'master', 'develop')
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        url: githubUrl, // Replace with your GitHub repository URL
+                        credentialsId: githubCredentialName // Replace with your Jenkins credentials ID for GitHub access
+                    ]]
+                ])
+            }
+        }
+
+        stage("install azure cli") {
+            sh("curl -sL https://aka.ms/InstallAzureCLIDeb | bash")
+        }
+
+        stage("Terraform setup") {
+            sh("wget https://releases.hashicorp.com/terraform/1.5.3/terraform_1.5.3_linux_amd64.zip && \
+            unzip terraform_1.5.3_linux_amd64.zip && \
+            mv terraform /bin")
+            sh("terraform -v")
+        }
+
+        stage("Deployment") {
+            dir("files/azure_vm/deploy") {
+                withCredentials([azureServicePrincipal(credentialsId: azureCredentialId,
+                                    subscriptionIdVariable: 'SUBS_ID',
+                                    clientIdVariable: 'CLIENT_ID',
+                                    clientSecretVariable: 'CLIENT_SECRET',
+                                    tenantIdVariable: 'TENANT_ID')]) {
+                    sh("az login --service-principal -u ${CLIENT_ID} -p ${CLIENT_SECRET} -t ${TENANT_ID}")
+
+                    // TODO: add withCredentials block to get the access key as jenkisn credential
+                    sh("terraform init -backend-config=\"access_key=${azureStorageAccountAccessKey}\"")
+                    
+                    if (action == "destroy") {
+                        sh("terraform plan -${action}")
+                    } else {
+                        sh("terraform plan")
+                    }
+
+                    timeout(time: 20, unit: 'MINUTES') {
+                        input(
+                            message:  '''
+                                WARNING: Did you REALLY review the above terraform plan output?
+                                Not being sure about the changes reported can effect the environment and cause problems to clients.
+
+                                Action: ${action}
+
+                                Proceed or abort?
+                                ''',
+                            id: 'proceed'
+                        )
+                    }
+
+                    sh("terraform ${action} -auto-approve")
+
+                }
+            }
+        }
+    } catch(e) {
+        error(e.getMessage())
+    } finally {
+        deleteDir()
+    }
+}

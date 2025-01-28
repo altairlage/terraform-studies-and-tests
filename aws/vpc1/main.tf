@@ -168,3 +168,9 @@ resource "aws_route_table_association" "rt_assoc_private" {
     route_table_id = aws_route_table.private_subnet_rt.id
     subnet_id = aws_subnet.private_subnet.id
 }
+
+// ensure there is always some traffic through the VPN
+// ping from IT to consul
+// Lambda to ping IT server
+// the client has to stabilish the connection, not AWS
+
