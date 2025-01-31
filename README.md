@@ -1,6 +1,11 @@
 # Terraform Studies and Tests
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Language: HCL](https://img.shields.io/badge/language-HCL-blue)
+![Terraform](https://img.shields.io/badge/Terraform-7B42BC?logo=terraform)
+![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazon-aws)
+![Azure](https://img.shields.io/badge/Azure-0078D4?logo=microsoft-azure)
+![Cloudformation](https://img.shields.io/badge/Cloudformation-FF4F8B?logo=amazon-aws)
 
 ## Overview
 
